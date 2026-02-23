@@ -3296,7 +3296,8 @@ mod tests {
     }
 
     // Helper function to create mock http client that returns valid response for RouterHttpRequest
-    fn create_mock_http_client_router_http_request_valid_response() -> MockInternalHttpClientService {
+    fn create_mock_http_client_router_http_request_valid_response() -> MockInternalHttpClientService
+    {
         mock_with_callback(move |_: http::Request<RouterBody>| {
             Box::pin(async {
                 let response = json!({
@@ -3317,7 +3318,8 @@ mod tests {
     }
 
     // Helper function to create mock http client that returns valid response for RouterHttpResponse
-    fn create_mock_http_client_router_http_response_valid_response() -> MockInternalHttpClientService {
+    fn create_mock_http_client_router_http_response_valid_response() -> MockInternalHttpClientService
+    {
         mock_with_deferred_callback(move |_: http::Request<RouterBody>| {
             Box::pin(async {
                 let response = json!({
@@ -4724,7 +4726,11 @@ mod tests {
                 let _ = service_stack.oneshot(request).await.unwrap();
             }
 
-            assert_coprocessor_operations_metrics(&[(PipelineStep::RouterHttpRequest, 3, Some(true))]);
+            assert_coprocessor_operations_metrics(&[(
+                PipelineStep::RouterHttpRequest,
+                3,
+                Some(true),
+            )]);
         }
         .with_metrics()
         .await;
@@ -4735,7 +4741,8 @@ mod tests {
         async {
             for _ in 0..3 {
                 let router_http_stage = create_router_http_stage_for_response_validation_test();
-                let mock_http_client = create_mock_http_client_router_http_response_valid_response();
+                let mock_http_client =
+                    create_mock_http_client_router_http_response_valid_response();
                 let mock_router_service = create_mock_router_service();
 
                 let service_stack = router_http_stage
@@ -4752,7 +4759,11 @@ mod tests {
                 let _ = service_stack.oneshot(request).await.unwrap();
             }
 
-            assert_coprocessor_operations_metrics(&[(PipelineStep::RouterHttpResponse, 3, Some(true))]);
+            assert_coprocessor_operations_metrics(&[(
+                PipelineStep::RouterHttpResponse,
+                3,
+                Some(true),
+            )]);
         }
         .with_metrics()
         .await;
