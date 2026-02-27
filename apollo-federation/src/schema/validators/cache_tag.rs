@@ -28,7 +28,7 @@ use crate::schema::position::ObjectOrInterfaceTypeDefinitionPosition;
 use crate::schema::position::ObjectTypeDefinitionPosition;
 use crate::schema::position::TypeDefinitionPosition;
 
-const DEFAULT_CONNECT_SPEC: ConnectSpec = ConnectSpec::V0_2;
+const DEFAULT_CONNECT_SPEC: ConnectSpec = ConnectSpec::V0_3;
 
 pub(crate) fn validate_cache_tag_directives(
     schema: &FederationSchema,
