@@ -544,8 +544,8 @@ async fn test_coprocessor_router_http_request_response_modification() {
             "coprocessor": {
                 "url": coprocessor_url,
                 "router_http": {
-                    "request": { "context": true },
-                    "response": { "context": true, "headers": true },
+                    "request": { "context": "all" },
+                    "response": { "context": "all", "headers": true },
                 }
             }
         }))
@@ -889,4 +889,32 @@ telemetry:
 
     router.graceful_shutdown().await;
     Ok(())
+}
+
+/// When coprocessor has router_http configured, the router logs a one-time warning at startup.
+/// Skipped when GraphOS is not enabled (coprocessor requires a GraphOS license).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_router_http_customization_warning_logged() {
+    if !graph_os_enabled() {
+        return;
+    }
+    let config = r#"
+coprocessor:
+  url: http://127.0.0.1:9999
+  router_http:
+    request:
+      headers: true
+"#;
+
+    let mut router = IntegrationTest::builder()
+        .config(config.to_string())
+        .build()
+        .await;
+
+    router.start().await;
+    router.assert_started().await;
+
+    router.assert_log_contained("RouterHttp customizations are in use");
+
+    router.graceful_shutdown().await;
 }

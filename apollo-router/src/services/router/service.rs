@@ -820,6 +820,10 @@ pub(crate) fn process_vary_header(headers: &mut HeaderMap<HeaderValue>) {
 
 /// Dispatches requests to either the static-only path (no RouterHttp plugins) or the full
 /// RouterHttp pipeline. Static landing requests (GET + Accept: text/html) skip the plugin stack.
+///
+/// Before a request reaches this gate, HTTP server layers already run (see `axum_http_server_factory`):
+/// Axum routing, decompression, license handler, CORS, TraceLayer (tracing), and metrics handler.
+/// The RouterHttp plugin stack (telemetry init, license enforcement, user plugins, etc.) runs next.
 struct RouterHttpGate {
     static_only: router::BoxService,
     full_pipeline: router::BoxService,

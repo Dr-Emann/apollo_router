@@ -110,6 +110,10 @@ This value is one of the following:
 - `ConnectorRequest`: The `ConnectorRequestService` is about to send an HTTP request to a REST API.
 - `ConnectorResponse`: The `ConnectorRequestService` has just received an HTTP response from a REST API.
 
+<Caution>
+Using the **RouterHttp** stage (`RouterHttpRequest` / `RouterHttpResponse`) means your coprocessor runs *before* traffic shaping, limits, CSRF, and other router protections. Only use it if you understand and accept that risk. Ensure your coprocessor can scale to handle load.
+</Caution>
+
 **Do not return a _different_ value for this property.** If you do, the router treats the coprocessor request as if it failed.
 
 </td>

@@ -108,6 +108,10 @@ In this case, the `RouterService` only sends a coprocessor request whenever it r
 
 To hook into the **RouterHttp** pipeline (raw HTTP layer, before the Router pipeline) instead of or in addition to the Router stage, use the `router_http` key:
 
+<Caution>
+Using the **RouterHttp** stage means your coprocessor runs *before* traffic shaping, limits, CSRF, and other router protections. Only use it if you understand and accept that risk. Ensure your coprocessor can scale to handle load.
+</Caution>
+
 ```yaml title="router.yaml"
 coprocessor:
   url: http://127.0.0.1:8081

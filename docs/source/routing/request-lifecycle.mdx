@@ -21,7 +21,7 @@ A query plan is a blueprint for dividing a single incoming operation into one or
 
 In the request path, the request lifecycle services process each request in the following order:
 
-* The **RouterHttp** pipeline runs first at the raw HTTP layer. Rhai scripts, native plugins, the external coprocessor (when configured), and built-in features (such as license enforcement) can hook in here before the request reaches the Router service. Only **GraphQL requests** pass through this layer; the [Apollo Sandbox](/graphos/explorer/sandbox) (or homepage) when enabled and the [health check](/graphos/routing/self-hosted/health-checks) endpoint are served separately and do not go through RouterHttp.
+* The **RouterHttp** pipeline runs first at the raw HTTP layer. Rhai scripts, native plugins, the external coprocessor (when configured), and built-in features (such as license enforcement) can hook in here before the request reaches the Router service. Only **GraphQL requests** pass through this layer; the [Apollo Sandbox](/graphos/explorer/sandbox) (or homepage) when enabled and the [health check](/graphos/routing/self-hosted/health-checks) endpoint are served separately and do not go through RouterHttp. HTTP server layers (e.g. decompression, tracing) may run before the RouterHttp pipeline.
 * The **Router service** receives the client request from the HTTP server and parses it into a GraphQL operation.
 * The **Supergraph service** receives a GraphQL operation and calls the router's query planner to produce the query plan that most efficiently executes the operation.
 * The **Execution service** executes a query plan by calling the necessary subgraph services to make subgraph requests
@@ -282,5 +282,9 @@ Each request and response object contains a `Context` object, which is carried t
 
 * **RouterHttp** (`router_http_service`) is the top-level hook and runs before all Router-pipeline plugins (telemetry, traffic shaping, limits, CSRF, and other built-in plugins with a `router_service` hook). Use **RouterHttp** when you need the earliest possible point—for example, before rate limiting or telemetry.
 * **Router** (`router_service`) runs after RouterHttp and after those built-in Router plugins. Use **Router** when you need the deserialized `RouterRequest` and it's acceptable to run after telemetry and other built-in plugins (for example, so errors are recorded and you can interact with HTTP context and headers at the Router stage, such as for JWT verification).
+
+<Caution>
+Using the **RouterHttp** hook means your code runs *before* traffic shaping, limits, CSRF, and other router protections. Only use it if you understand and accept that risk. If you use a coprocessor at RouterHttp, ensure you can scale it to handle load.
+</Caution>
 
 To learn how to hook in to the various lifecycle stages, including examples customizations, start with the [router customization overview](/graphos/routing/customization/overview), then refer to the [Rhai scripts](/graphos/routing/customization/rhai/) and [external coprocessing](/router/customizations/coprocessor/) docs.

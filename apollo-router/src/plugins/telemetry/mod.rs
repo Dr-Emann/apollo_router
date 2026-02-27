@@ -363,7 +363,10 @@ impl PluginPrivate for Telemetry {
         })
     }
 
-    fn router_service(&self, service: router::BoxService) -> router::BoxService {
+    /// Router-stage telemetry runs only at RouterHttp (earliest hook). Creates the router span,
+    /// per-request init, and response handling so RouterHttp plugins are observable and the full
+    /// request is traced.
+    fn router_http_service(&self, service: router::BoxService) -> router::BoxService {
         let config = self.config.clone();
         let supergraph_schema_id = self.supergraph_schema_id.clone();
         let config_later = self.config.clone();
@@ -382,14 +385,17 @@ impl PluginPrivate for Telemetry {
 
         ServiceBuilder::new()
             .layer(metrics::allocation::AllocationMetricsLayer::new())
+            .option_layer(use_legacy_request_span.then(move || {
+                InstrumentLayer::new(move |request: &router::Request| {
+                    span_mode.create_router(&request.router_request)
+                })
+            }))
             .map_response(move |response: router::Response| {
-                // The current span *should* be the request span as we are outside the instrument block.
                 let span = Span::current();
                 if let Some(span_name) = span.metadata().map(|metadata| metadata.name())
                     && ((use_legacy_request_span && span_name == REQUEST_SPAN_NAME)
                         || (!use_legacy_request_span && span_name == ROUTER_SPAN_NAME))
                 {
-                    //https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/instrumentation/graphql/
                     let operation_kind = response.context.get::<_, String>(OPERATION_KIND);
                     let operation_name = response.context.get::<_, String>(OPERATION_NAME);
 
@@ -414,11 +420,6 @@ impl PluginPrivate for Telemetry {
 
                 response
             })
-            .option_layer(use_legacy_request_span.then(move || {
-                InstrumentLayer::new(move |request: &router::Request| {
-                    span_mode.create_router(&request.router_request)
-                })
-            }))
             .map_future_with_request_data(
                 move |request: &router::Request| {
                     let _ = request.context.insert(
@@ -427,7 +428,6 @@ impl PluginPrivate for Telemetry {
                     );
                     if !use_legacy_request_span {
                         let span = Span::current();
-
                         span.set_span_dyn_attribute(
                             HTTP_REQUEST_METHOD.into(),
                             request.router_request.method().to_string().into(),
@@ -448,7 +448,6 @@ impl PluginPrivate for Telemetry {
                     if let Some(name) = client_name {
                         let _ = request.context.insert(CLIENT_NAME, name.to_owned());
                     }
-
                     if let Some(version) = client_version {
                         let _ = request.context.insert(CLIENT_VERSION, version.to_owned());
                     }
@@ -467,7 +466,6 @@ impl PluginPrivate for Telemetry {
                     if let Some(name) = library_name {
                         let _ = request.context.insert(CLIENT_LIBRARY_NAME, name.to_owned());
                     }
-
                     if let Some(version) = library_version {
                         let _ = request
                             .context
@@ -489,7 +487,6 @@ impl PluginPrivate for Telemetry {
                         ),
                     ));
 
-                    // Create and store router overhead tracker in context
                     request.context.extensions().with_lock(|lock| {
                         lock.insert(router_overhead::RouterOverheadTracker::new());
                     });
@@ -526,9 +523,6 @@ impl PluginPrivate for Telemetry {
                     Self::plugin_metrics(&config);
 
                     async move {
-                        // NB: client name and version must be picked up here, rather than in the
-                        //  `req_fn` of this `map_future_with_request_data` call, to allow plugins
-                        //  at the router service to modify the name and version.
                         let get_from_context =
                             |ctx: &Context, key| ctx.get::<&str, String>(key).ok().flatten();
                         let client_name = get_from_context(&ctx, CLIENT_NAME).or_else(|| {
@@ -611,7 +605,6 @@ impl PluginPrivate for Telemetry {
                                     sender,
                                     true,
                                     start.elapsed(),
-                                    // the query is invalid, we did not parse the operation kind
                                     OperationKind::Query,
                                     None,
                                     Default::default(),
@@ -648,6 +641,11 @@ impl PluginPrivate for Telemetry {
             )
             .service(service)
             .boxed()
+    }
+
+    /// Router-stage telemetry runs in router_http_service only; pass through unchanged here.
+    fn router_service(&self, service: router::BoxService) -> router::BoxService {
+        service
     }
 
     fn supergraph_service(&self, service: supergraph::BoxService) -> supergraph::BoxService {

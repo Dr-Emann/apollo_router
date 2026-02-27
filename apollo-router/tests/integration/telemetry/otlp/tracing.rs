@@ -97,6 +97,54 @@ async fn test_basic() -> Result<(), BoxError> {
     Ok(())
 }
 
+/// With telemetry init at RouterHttp, a request that passes through the RouterHttp pipeline
+/// (e.g. Rhai router_http) must still produce the expected router span so RouterHttp execution is observable.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_router_http_observable_in_telemetry() -> Result<(), BoxError> {
+    if !graph_os_enabled() {
+        return Ok(());
+    }
+    let mock_server = mock_otlp_server(1..).await;
+    let config = include_str!("../fixtures/otlp_router_http.router.yaml")
+        .replace("<otel-collector-endpoint>", &mock_server.uri());
+
+    let mut router = IntegrationTest::builder()
+        .telemetry(Telemetry::Otlp {
+            endpoint: Some(format!("{}/v1/traces", mock_server.uri())),
+        })
+        .config(&config)
+        .build()
+        .await;
+
+    router.start().await;
+    router.assert_started().await;
+
+    TraceSpec::builder()
+        .operation_name("ExampleQuery")
+        .services(["client", "router", "subgraph"].into())
+        .span_names(
+            [
+                "query_planning",
+                "client_request",
+                "ExampleQuery__products__0",
+                "fetch",
+                "execution",
+                "query ExampleQuery",
+                "subgraph server",
+                "parse_query",
+                "http_request",
+            ]
+            .into(),
+        )
+        .subgraph_sampled(true)
+        .build()
+        .validate_otlp_trace(&mut router, &mock_server, Query::default())
+        .await?;
+
+    router.graceful_shutdown().await;
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resources() -> Result<(), BoxError> {
     if !graph_os_enabled() {

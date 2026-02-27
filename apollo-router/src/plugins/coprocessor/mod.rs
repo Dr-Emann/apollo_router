@@ -99,6 +99,14 @@ impl PluginPrivate for CoprocessorPlugin<HTTPClientService> {
             );
         }
 
+        if init.config.router_http != RouterHttpStage::default() {
+            tracing::warn!(
+                "RouterHttp customizations are in use (coprocessor.router_http). \
+                 Requests that pass through RouterHttp plugins run before traffic shaping, limits, \
+                 CSRF, and other router protections. Ensure you understand the performance and security risks."
+            );
+        }
+
         if matches!(
             init.config.router.request.context,
             ContextConf::Deprecated(true)
