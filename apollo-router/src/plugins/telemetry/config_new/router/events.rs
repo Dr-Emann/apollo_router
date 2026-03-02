@@ -155,7 +155,7 @@ mod tests {
 
         async {
             test_harness
-                .router_service(|_r| async {
+                .router_http_service(|_r| async {
                     Ok(router::Response::fake_builder()
                         .header("custom-header", "val1")
                         .header(CONTENT_LENGTH, "25")
@@ -194,7 +194,7 @@ mod tests {
         async {
             // Without the header to enable custom event
             test_harness
-                .router_service(
+                .router_http_service(
 
                     |_r| async {
                         let context_with_error = Context::new();
@@ -233,7 +233,7 @@ mod tests {
         async {
             // Without the header to enable custom event
             test_harness
-                .router_service(
+                .router_http_service(
                     |_r| async {
                         Ok(router::Response::fake_builder()
                             .header("custom-header", "val1")
