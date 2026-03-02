@@ -15,7 +15,6 @@ use crate::connectors::ConnectSpec;
 use crate::connectors::SelectionTrie;
 use crate::connectors::StringTemplate;
 use crate::connectors::StringTemplateError;
-use crate::connectors::spec::connect_spec_from_schema;
 use crate::error::ErrorCode;
 use crate::error::FederationError;
 use crate::internal_error;
@@ -28,7 +27,9 @@ use crate::schema::position::ObjectOrInterfaceTypeDefinitionPosition;
 use crate::schema::position::ObjectTypeDefinitionPosition;
 use crate::schema::position::TypeDefinitionPosition;
 
-const DEFAULT_CONNECT_SPEC: ConnectSpec = ConnectSpec::V0_3;
+// `@cacheTag` uses the basic string interpolation from Connect spec v0.2.
+// It doesn't have to be in sync with the latest Connect version.
+const CONNECT_SPEC_FOR_INTERPOLATION: ConnectSpec = ConnectSpec::V0_2;
 
 pub(crate) fn validate_cache_tag_directives(
     schema: &FederationSchema,
@@ -123,8 +124,7 @@ fn validate_args_on_field(
     args: &CacheTagDirectiveArguments,
 ) -> Result<(), FederationError> {
     let field_def = field.get(schema.schema())?;
-    let connect_spec = connect_spec_from_schema(schema.schema()).unwrap_or(DEFAULT_CONNECT_SPEC);
-    let format = match StringTemplate::parse_with_spec(args.format, connect_spec) {
+    let format = match StringTemplate::parse_with_spec(args.format, CONNECT_SPEC_FOR_INTERPOLATION) {
         Ok(format) => format,
         Err(err) => {
             errors.push(Message::new(schema, field_def, err.into()));
@@ -244,8 +244,7 @@ fn validate_args_on_object_type(
     args: &CacheTagDirectiveArguments,
 ) -> Result<(), FederationError> {
     let type_def = type_pos.get(schema.schema())?;
-    let connect_spec = connect_spec_from_schema(schema.schema()).unwrap_or(DEFAULT_CONNECT_SPEC);
-    let format = match StringTemplate::parse_with_spec(args.format, connect_spec) {
+    let format = match StringTemplate::parse_with_spec(args.format, CONNECT_SPEC_FOR_INTERPOLATION) {
         Ok(format) => format,
         Err(err) => {
             errors.push(Message::new(schema, type_def, err.into()));
@@ -783,10 +782,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_latest_connect_spec() {
-        // This test exists to find out when ConnectSpec::latest() changes, so
-        // we can decide whether to update DEFAULT_CONNECT_SPEC.
-        assert_eq!(DEFAULT_CONNECT_SPEC, ConnectSpec::latest());
-    }
 }
