@@ -21,7 +21,7 @@ A query plan is a blueprint for dividing a single incoming operation into one or
 
 In the request path, the request lifecycle services process each request in the following order:
 
-* The **RouterHttp** pipeline runs first at the raw HTTP layer. Rhai scripts, native plugins, the external coprocessor (when configured), and built-in features (such as license enforcement) can hook in here before the request reaches the Router service. Only **GraphQL requests** pass through this layer; the [Apollo Sandbox](/graphos/explorer/sandbox) (or homepage) when enabled and the [health check](/graphos/routing/self-hosted/health-checks) endpoint are served separately and do not go through RouterHttp. HTTP server layers (e.g. decompression, tracing) may run before the RouterHttp pipeline.
+* The **RouterHttp** pipeline runs first at the raw HTTP layer. Rhai scripts, native plugins, the external coprocessor (when configured), and built-in features, like license enforcement, can hook in here before the request reaches the Router service. Only **GraphQL requests** pass through this layer; the [Apollo Sandbox](/graphos/explorer/sandbox) (or homepage) when enabled and the [health check](/graphos/routing/self-hosted/health-checks) endpoint are served separately and don't pass through RouterHttp. HTTP server layers (for example, decompression and tracing) might run before the RouterHttp pipeline.
 * The **Router service** receives the client request from the HTTP server and parses it into a GraphQL operation.
 * The **Supergraph service** receives a GraphQL operation and calls the router's query planner to produce the query plan that most efficiently executes the operation.
 * The **Execution service** executes a query plan by calling the necessary subgraph services to make subgraph requests
@@ -31,10 +31,10 @@ In the request path, the request lifecycle services process each request in the 
 
 For GraphQL requests, the order is:
 
-* **RouterHttp plugins** run first (Rhai, native plugins, coprocessor, license enforcement).
-* Then the **Router pipeline** runs: first the built-in plugins that have a `router_service` hook (for example, telemetry, traffic shaping, limits, CSRF, fleet detector, health check, headers), then user plugins, then content negotiation and the Router core.
+1. **RouterHttp plugins** run (Rhai, native plugins, coprocessor, license enforcement).
+2. The **Router pipeline** runs. First, the built-in plugins that have a `router_service` hook (for example, telemetry, traffic shaping, limits, CSRF, fleet detector, health check, headers) run. Second, user plugins run. Third, content negotiation and the Router core run.
 
-Each service encapsulates and transforms the contents of a request into its own context. The following diagram and its steps describe how an HTTP request is transformed and propagated through the request path:
+Each service encapsulates and transforms the contents of a request into its own context. The diagram and its steps illustrate how an HTTP request is transformed and propagated through the request path:
 
 ```mermaid
 flowchart TB;
@@ -88,7 +88,7 @@ service2 --"8b. HTTP request"--> subgraphB;
 ```
 
 1. The router receives a client request at an HTTP server.
-2. GraphQL requests pass through the **RouterHttp** pipeline at the raw HTTP layer, where plugins (Rhai, native, license enforcement) can run. The static landing page (Sandbox/homepage) and the health check endpoint do not go through this layer; they are served separately. The HTTP server then transforms the HTTP request into a `RouterRequest` containing HTTP headers and the request body as a stream of byte arrays.
+2. GraphQL requests pass through the **RouterHttp** pipeline at the raw HTTP layer, where plugins, like Rhai, native, and license enforcement, can run. The static landing page (Sandbox/homepage) and the health check endpoint don't pass through this layer; they are served separately. The HTTP server then transforms the HTTP request into a `RouterRequest` containing HTTP headers and the request body as a stream of byte arrays.
 3. The router service receives the `RouterRequest`. It handles Automatic Persisted Queries (APQ), parses the GraphQL request from JSON, validates the query against the schema, and calls the supergraph service with the resulting `SupergraphRequest`.
 4. The supergraph service calls the query planner with the GraphQL query from the `SupergraphRequest`.
 5. The query planner returns a query plan for most efficiently executing the query.
@@ -280,11 +280,11 @@ Each request and response object contains a `Context` object, which is carried t
 
 ### RouterHttp vs Router: when to use which
 
-* **RouterHttp** (`router_http_service`) is the top-level hook and runs before all Router-pipeline plugins (telemetry, traffic shaping, limits, CSRF, and other built-in plugins with a `router_service` hook). Use **RouterHttp** when you need the earliest possible point—for example, before rate limiting or telemetry.
+* **RouterHttp** (`router_http_service`) is the top-level hook and runs before all Router-pipeline plugins, like telemetry, traffic shaping, limits, CSRF, and other built-in plugins with a `router_service` hook. Use **RouterHttp** when you need entry at the earliest possible moment (for example, before rate limiting or telemetry).
 * **Router** (`router_service`) runs after RouterHttp and after those built-in Router plugins. Use **Router** when you need the deserialized `RouterRequest` and it's acceptable to run after telemetry and other built-in plugins (for example, so errors are recorded and you can interact with HTTP context and headers at the Router stage, such as for JWT verification).
 
 <Caution>
-Using the **RouterHttp** hook means your code runs *before* traffic shaping, limits, CSRF, and other router protections. Only use it if you understand and accept that risk. If you use a coprocessor at RouterHttp, ensure you can scale it to handle load.
+Using the **RouterHttp** hook means your code runs *before* traffic shaping, limits, CSRF, and other router protections. Only use the **RouterHttp** hook if you can accept that risk. If you use a coprocessor at RouterHttp, make sure you can scale it to handle the load.
 </Caution>
 
 To learn how to hook in to the various lifecycle stages, including examples customizations, start with the [router customization overview](/graphos/routing/customization/overview), then refer to the [Rhai scripts](/graphos/routing/customization/rhai/) and [external coprocessing](/router/customizations/coprocessor/) docs.

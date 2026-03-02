@@ -21,13 +21,13 @@ In these cases, you can create custom plugins for the router.
 
 ## Planning a plugin
 
-When designing a new plugin, you first want to determine which of the router's **services** the plugin should hook into to achieve its use case. The **RouterHttp** pipeline runs at the raw HTTP layer before the main Router pipeline; use the `router_http_service` hook for logic that must run at the earliest possible point (for example, before telemetry). RouterHttp runs only for **GraphQL requests**; it does **not** run for the static landing page ([Apollo Sandbox](/graphos/explorer/sandbox) or homepage when enabled) or for the [health check](/graphos/routing/self-hosted/health-checks) (separate route).
+When designing a new plugin, you first want to determine which of the router's **services** the plugin should hook into . The **RouterHttp** pipeline runs at the raw HTTP layer before the main Router pipeline; use the `router_http_service` hook for logic that must run at the earliest possible moment (for example, before telemetry). RouterHttp runs only for **GraphQL requests**; it doesn't run for the static landing page ([Apollo Sandbox](/graphos/explorer/sandbox) or homepage when enabled) or for the [health check](/graphos/routing/self-hosted/health-checks), which is a separate route.
 
 <Caution>
-Using the **router_http_service** hook means your plugin runs *before* traffic shaping, limits, CSRF, and other router protections. Only use it if you understand and accept that risk.
+Using the **router_http_service** hook means your plugin runs *before* traffic shaping, limits, CSRF, and other router protections. Only use the **router_http_service** hook if you can accept that risk.
 </Caution>
 
-For descriptions of these services, see [Router request lifecycle](/graphos/routing/request-lifecycle).
+For descriptions of those services, go to the [Router request lifecycle page](/graphos/routing/request-lifecycle).
 
 ## Building a plugin
 
