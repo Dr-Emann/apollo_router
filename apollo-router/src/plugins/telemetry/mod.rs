@@ -434,43 +434,11 @@ impl PluginPrivate for Telemetry {
                         );
                     }
 
-                    let client_name = request
-                        .router_request
-                        .headers()
-                        .get(&config_request.apollo.client_name_header)
-                        .and_then(|h| h.to_str().ok());
-                    let client_version = request
-                        .router_request
-                        .headers()
-                        .get(&config_request.apollo.client_version_header)
-                        .and_then(|h| h.to_str().ok());
-
-                    if let Some(name) = client_name {
-                        let _ = request.context.insert(CLIENT_NAME, name.to_owned());
-                    }
-                    if let Some(version) = client_version {
-                        let _ = request.context.insert(CLIENT_VERSION, version.to_owned());
-                    }
-
-                    let library_name = request
-                        .router_request
-                        .headers()
-                        .get(&config_request.apollo.library_name_header)
-                        .and_then(|h| h.to_str().ok());
-                    let library_version = request
-                        .router_request
-                        .headers()
-                        .get(&config_request.apollo.library_version_header)
-                        .and_then(|h| h.to_str().ok());
-
-                    if let Some(name) = library_name {
-                        let _ = request.context.insert(CLIENT_LIBRARY_NAME, name.to_owned());
-                    }
-                    if let Some(version) = library_version {
-                        let _ = request
-                            .context
-                            .insert(CLIENT_LIBRARY_VERSION, version.to_owned());
-                    }
+                    // Client name/version and library name/version are not read from headers here.
+                    // They are set from headers in router_service so router_service plugins (e.g. Rhai)
+                    // can override context. Router_http plugins can override by mutating headers before
+                    // the request reaches router_service. Span attributes are set from response
+                    // context after the inner service runs.
 
                     let mut custom_attributes = config_request
                         .instrumentation
@@ -508,7 +476,7 @@ impl PluginPrivate for Telemetry {
                         request.context.clone(),
                     )
                 },
-                move |(mut custom_attributes, custom_instruments, mut custom_events, ctx): (
+                move |(custom_attributes, custom_instruments, mut custom_events, ctx): (
                     Vec<KeyValue>,
                     RouterInstruments,
                     RouterEvents,
@@ -525,22 +493,6 @@ impl PluginPrivate for Telemetry {
                     async move {
                         let get_from_context =
                             |ctx: &Context, key| ctx.get::<&str, String>(key).ok().flatten();
-                        let client_name = get_from_context(&ctx, CLIENT_NAME).or_else(|| {
-                            get_from_context(
-                                &ctx,
-                                crate::context::deprecated::DEPRECATED_CLIENT_NAME,
-                            )
-                        });
-                        let client_version = get_from_context(&ctx, CLIENT_VERSION).or_else(|| {
-                            get_from_context(
-                                &ctx,
-                                crate::context::deprecated::DEPRECATED_CLIENT_VERSION,
-                            )
-                        });
-                        custom_attributes.extend([
-                            KeyValue::new(CLIENT_NAME_KEY, client_name.unwrap_or_default()),
-                            KeyValue::new(CLIENT_VERSION_KEY, client_version.unwrap_or_default()),
-                        ]);
 
                         let span = Span::current();
                         span.set_span_dyn_attributes(custom_attributes);
@@ -553,6 +505,29 @@ impl PluginPrivate for Telemetry {
 
                         let expose_trace_id = &config.exporters.tracing.response_trace_id;
                         if let Ok(response) = &response {
+                            // Use response context for client name/version so router_service
+                            // plugins (e.g. Rhai) that override them are reflected in the span.
+                            let response_ctx = &response.context;
+                            let client_name = get_from_context(response_ctx, CLIENT_NAME).or_else(|| {
+                                get_from_context(
+                                    response_ctx,
+                                    crate::context::deprecated::DEPRECATED_CLIENT_NAME,
+                                )
+                            });
+                            let client_version =
+                                get_from_context(response_ctx, CLIENT_VERSION).or_else(|| {
+                                    get_from_context(
+                                        response_ctx,
+                                        crate::context::deprecated::DEPRECATED_CLIENT_VERSION,
+                                    )
+                                });
+                            span.set_span_dyn_attributes([
+                                KeyValue::new(CLIENT_NAME_KEY, client_name.unwrap_or_default()),
+                                KeyValue::new(
+                                    CLIENT_VERSION_KEY,
+                                    client_version.unwrap_or_default(),
+                                ),
+                            ]);
                             span.set_span_dyn_attributes(
                                 config
                                     .instrumentation
@@ -643,9 +618,52 @@ impl PluginPrivate for Telemetry {
             .boxed()
     }
 
-    /// Router-stage telemetry runs in router_http_service only; pass through unchanged here.
+    /// Populates context from request headers (client name/version, library name/version) so
+    /// router_service plugins (e.g. Rhai) can override before telemetry reads from response context
+    /// in router_http. Router_http plugins can override by mutating headers before the request
+    /// reaches the router pipeline.
     fn router_service(&self, service: router::BoxService) -> router::BoxService {
-        service
+        let config = self.config.clone();
+        ServiceBuilder::new()
+            .map_request(move |request: router::Request| {
+                let client_name = request
+                    .router_request
+                    .headers()
+                    .get(&config.apollo.client_name_header)
+                    .and_then(|h| h.to_str().ok());
+                let client_version = request
+                    .router_request
+                    .headers()
+                    .get(&config.apollo.client_version_header)
+                    .and_then(|h| h.to_str().ok());
+                if let Some(name) = client_name {
+                    let _ = request.context.insert(CLIENT_NAME, name.to_owned());
+                }
+                if let Some(version) = client_version {
+                    let _ = request.context.insert(CLIENT_VERSION, version.to_owned());
+                }
+                let library_name = request
+                    .router_request
+                    .headers()
+                    .get(&config.apollo.library_name_header)
+                    .and_then(|h| h.to_str().ok());
+                let library_version = request
+                    .router_request
+                    .headers()
+                    .get(&config.apollo.library_version_header)
+                    .and_then(|h| h.to_str().ok());
+                if let Some(name) = library_name {
+                    let _ = request.context.insert(CLIENT_LIBRARY_NAME, name.to_owned());
+                }
+                if let Some(version) = library_version {
+                    let _ = request
+                        .context
+                        .insert(CLIENT_LIBRARY_VERSION, version.to_owned());
+                }
+                request
+            })
+            .service(service)
+            .boxed()
     }
 
     fn supergraph_service(&self, service: supergraph::BoxService) -> supergraph::BoxService {

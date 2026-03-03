@@ -827,6 +827,10 @@ async fn test_attributes() -> Result<(), BoxError> {
     Ok(())
 }
 
+/// Verifies that the router span gets client name/version from response context (not the initial
+/// request). Router-stage telemetry runs in router_http_service; it must set span attributes from
+/// the response context after the inner service runs, so router_service plugins (e.g. Rhai) that
+/// override context are reflected in the trace.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_plugin_overridden_client_name_is_included_in_telemetry() -> Result<(), BoxError> {
     if !graph_os_enabled() {
@@ -846,8 +850,8 @@ async fn test_plugin_overridden_client_name_is_included_in_telemetry() -> Result
     router.start().await;
     router.assert_started().await;
 
-    // rhai script overrides client.name - no matter what client name we pass via headers, it should
-    // end up equalling the value set in the script (`foo`)
+    // Rhai in router_service overrides client.name to "foo". No matter what we pass via headers,
+    // the trace must show client.name = "foo" (i.e. router_http must read from response context).
     for header_value in [None, Some(""), Some("foo"), Some("bar")] {
         let mut headers = HashMap::default();
         if let Some(value) = header_value {
