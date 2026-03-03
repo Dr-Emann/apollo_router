@@ -20,6 +20,7 @@
 # Cursor agent skills and plan docs (local/personal)
 .cursor/skills/
 .cursor/plan-docs/
+.cursor/plans/
 
 # Docs
 /docs/node_modules/
@@ -62,4 +63,5 @@ fuzz/timeout-*
 
 # Cursor plan docs and skills (local IDE configuration)
 .cursor/plan-docs/
+.cursor/plans/
 .cursor/skills/

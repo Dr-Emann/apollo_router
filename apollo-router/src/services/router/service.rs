@@ -757,8 +757,7 @@ impl RouterService {
                     .await?;
                 if let Some(level) = context
                     .extensions()
-                    .with_lock(|ext| ext.get::<DisplayRouterRequest>().cloned())
-                    .map(|d| d.0)
+                    .with_lock(|ext| ext.get::<DisplayRouterRequest>().cloned().map(|d| d.0))
                 {
                     let mut attrs = Vec::with_capacity(5);
                     #[cfg(test)]

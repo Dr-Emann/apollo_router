@@ -97,8 +97,8 @@ async fn test_basic() -> Result<(), BoxError> {
     Ok(())
 }
 
-/// With telemetry init at RouterHttp, a request that passes through the RouterHttp pipeline
-/// (e.g. Rhai router_http) must still produce the expected router span so RouterHttp execution is observable.
+/// With OTLP telemetry, a request that passes through the router pipeline (e.g. with Rhai at the
+/// router layer) must produce the expected router span so request execution is observable.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_router_http_observable_in_telemetry() -> Result<(), BoxError> {
     if !graph_os_enabled() {
@@ -124,6 +124,7 @@ async fn test_router_http_observable_in_telemetry() -> Result<(), BoxError> {
         .services(["client", "router", "subgraph"].into())
         .span_names(
             [
+                "router",
                 "query_planning",
                 "client_request",
                 "ExampleQuery__products__0",
@@ -828,9 +829,8 @@ async fn test_attributes() -> Result<(), BoxError> {
 }
 
 /// Verifies that the router span gets client name/version from response context (not the initial
-/// request). Router-stage telemetry runs in router_http_service; it must set span attributes from
-/// the response context after the inner service runs, so router_service plugins (e.g. Rhai) that
-/// override context are reflected in the trace.
+/// request). Router-stage telemetry sets span attributes from the response context after the inner
+/// service runs, so router_service plugins (e.g. Rhai) that override context are reflected in the trace.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_plugin_overridden_client_name_is_included_in_telemetry() -> Result<(), BoxError> {
     if !graph_os_enabled() {
@@ -851,7 +851,7 @@ async fn test_plugin_overridden_client_name_is_included_in_telemetry() -> Result
     router.assert_started().await;
 
     // Rhai in router_service overrides client.name to "foo". No matter what we pass via headers,
-    // the trace must show client.name = "foo" (i.e. router_http must read from response context).
+    // the trace must show client.name = "foo" (i.e. router span must read from response context).
     for header_value in [None, Some(""), Some("foo"), Some("bar")] {
         let mut headers = HashMap::default();
         if let Some(value) = header_value {

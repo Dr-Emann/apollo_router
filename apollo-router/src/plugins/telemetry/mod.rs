@@ -495,9 +495,9 @@ impl PluginPrivate for Telemetry {
                             |ctx: &Context, key| ctx.get::<&str, String>(key).ok().flatten();
 
                         let span = Span::current();
-                        span.set_span_dyn_attributes(custom_attributes);
                         let response: Result<router::Response, BoxError> = fut.await;
 
+                        span.set_span_dyn_attributes(custom_attributes);
                         span.record(
                             APOLLO_PRIVATE_DURATION_NS,
                             start.elapsed().as_nanos() as i64,
@@ -620,7 +620,7 @@ impl PluginPrivate for Telemetry {
 
     /// Populates context from request headers (client name/version, library name/version) so
     /// router_service plugins (e.g. Rhai) can override before telemetry reads from response context
-    /// in router_http. Router_http plugins can override by mutating headers before the request
+    /// in the router pipeline. Plugins can override by mutating headers before the request
     /// reaches the router pipeline.
     fn router_service(&self, service: router::BoxService) -> router::BoxService {
         let config = self.config.clone();

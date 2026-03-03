@@ -280,7 +280,7 @@ Each request and response object contains a `Context` object, which is carried t
 
 ### RouterHttp vs Router: when to use which
 
-* **RouterHttp** (`router_http_service`) is the top-level hook and runs before all Router-pipeline plugins, like telemetry, traffic shaping, limits, CSRF, and other built-in plugins with a `router_service` hook. Use **RouterHttp** when you need entry at the earliest possible moment (for example, before rate limiting or telemetry).
+* **RouterHttp** (`router_http_service`) is the top-level hook and runs before all Router-pipeline plugins, like telemetry, traffic shaping, limits, CSRF, and other built-in plugins with a `router_service` hook. Use **RouterHttp** when you need entry at the earliest possible moment (for example, before rate limiting or telemetry). Router HTTP does not have its own telemetry configuration; use the **router** layer for span attributes and events (they apply to the top-level router span).
 * **Router** (`router_service`) runs after RouterHttp and after those built-in Router plugins. Use **Router** when you need the deserialized `RouterRequest` and it's acceptable to run after telemetry and other built-in plugins (for example, so errors are recorded and you can interact with HTTP context and headers at the Router stage, such as for JWT verification).
 
 <Caution>
