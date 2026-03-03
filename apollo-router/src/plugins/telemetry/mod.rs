@@ -508,14 +508,15 @@ impl PluginPrivate for Telemetry {
                             // Use response context for client name/version so router_service
                             // plugins (e.g. Rhai) that override them are reflected in the span.
                             let response_ctx = &response.context;
-                            let client_name = get_from_context(response_ctx, CLIENT_NAME).or_else(|| {
-                                get_from_context(
-                                    response_ctx,
-                                    crate::context::deprecated::DEPRECATED_CLIENT_NAME,
-                                )
-                            });
-                            let client_version =
-                                get_from_context(response_ctx, CLIENT_VERSION).or_else(|| {
+                            let client_name =
+                                get_from_context(response_ctx, CLIENT_NAME).or_else(|| {
+                                    get_from_context(
+                                        response_ctx,
+                                        crate::context::deprecated::DEPRECATED_CLIENT_NAME,
+                                    )
+                                });
+                            let client_version = get_from_context(response_ctx, CLIENT_VERSION)
+                                .or_else(|| {
                                     get_from_context(
                                         response_ctx,
                                         crate::context::deprecated::DEPRECATED_CLIENT_VERSION,
