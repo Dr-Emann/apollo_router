@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-
 use apollo_compiler::Name;
 use apollo_compiler::Node;
 use apollo_compiler::Schema;
@@ -323,7 +322,6 @@ impl Subgraph<Initial> {
             schema.assume_valid()?
         };
 
-        trace!("expand_links: finished");
         Ok(Subgraph {
             name: self.name,
             url: self.url,
@@ -779,8 +777,10 @@ fn add_fed1_link_to_schema(
 pub(crate) fn schema_as_fed2_subgraph(
     mut schema: FederationSchema,
     use_latest: bool,
-) -> Result<Schema, FederationError> {
+) -> Result<FederationSchema, FederationError> {
+    trace!("schema_as_fed_2_subgraph: start");
     let (link_name_in_schema, metadata) = if let Some(metadata) = schema.metadata() {
+        trace!("schema_as_fed_2_subgraph: found links metadata!");
         let link_spec = metadata.link_spec_definition()?;
         // We don't accept pre-1.0 @core: this avoid having to care about what the name
         // of the argument below is, and why would be bother?
@@ -797,6 +797,7 @@ pub(crate) fn schema_as_fed2_subgraph(
         };
         (link.spec_name_in_schema().clone(), metadata)
     } else {
+        trace!("schema_as_fed_2_subgraph: links metadata not available");
         let link_spec = LinkSpecDefinition::latest();
         let link_name_in_schema = add_link_spec_to_schema(&mut schema, link_spec)?;
         schema.collect_links_metadata()?;
@@ -832,7 +833,7 @@ pub(crate) fn schema_as_fed2_subgraph(
     //            considering extensions. This seems consistent with the JS version. But, it's
     //            not consistent with the `add_to_schema`'s behavior. We may change to use the
     //            `schema_definition.origin_to_use()` method in the future.
-    let mut inner_schema = schema.into_inner();
+    let inner_schema = schema.schema_mut();
     inner_schema
         .schema_definition
         .make_mut()
@@ -850,7 +851,8 @@ pub(crate) fn schema_as_fed2_subgraph(
                 }),
             ],
         }));
-    Ok(inner_schema)
+    // TODO call complete subgraph schema
+    Ok(schema)
 }
 
 /// Returns a suitable alias for a named directive.
@@ -889,14 +891,14 @@ fn new_federation_subgraph_schema(
     trace!("new_federation_subgraph_schema: collect_shallow_references");
     schema.collect_shallow_references();
 
-    // Backfill missing directive definitions. This is primarily making sure we have a definition for `@link`.
-    // Note: Unlike `@core`, `@link` doesn't have to be defined in the schema.
-    trace!("new_federation_subgraph_schema: missing directive definitions");
-    for directive in &schema.schema().schema_definition.directives.clone() {
-        if schema.get_directive_definition(&directive.name).is_none() {
-            FederationBlueprint::on_missing_directive_definition(&mut schema, directive)?;
-        }
-    }
+    // // Backfill missing directive definitions. This is primarily making sure we have a definition for `@link`.
+    // // Note: Unlike `@core`, `@link` doesn't have to be defined in the schema.
+    // trace!("new_federation_subgraph_schema: missing directive definitions");
+    // for directive in &schema.schema().schema_definition.directives.clone() {
+    //     if schema.get_directive_definition(&directive.name).is_none() {
+    //         FederationBlueprint::on_missing_directive_definition(&mut schema, directive)?;
+    //     }
+    // }
 
     // Now that we have the definition for `@link`, the bootstrap directive detection should work.
     trace!("new_federation_subgraph_schema: collect_links_metadata");
@@ -907,18 +909,18 @@ fn new_federation_subgraph_schema(
 
 // PORT_NOTE: This corresponds to the `newEmptyFederation2Schema` function in JS.
 #[allow(unused)]
-pub(crate) fn new_empty_federation_2_subgraph_schema() -> Result<Schema, FederationError> {
+pub(crate) fn new_empty_federation_2_subgraph_schema() -> Result<FederationSchema, FederationError> {
     let mut schema = new_federation_subgraph_schema(Schema::new())?;
     schema_as_fed2_subgraph(schema, true)
 }
 
 /// Expands schema with all imported federation definitions.
 pub(crate) fn expand_schema(schema: Schema) -> Result<FederationSchema, FederationError> {
-    let mut schema = new_federation_subgraph_schema(schema)?;
+    let mut schema: FederationSchema = new_federation_subgraph_schema(schema)?;
 
-    // If there's a use of `@link` and we successfully added its definition, add the bootstrap directive
-    trace!("expand_links: bootstrap_spec_links");
-    bootstrap_spec_links(&mut schema)?;
+    // // If there's a use of `@link` and we successfully added its definition, add the bootstrap directive
+    // trace!("expand_links: bootstrap_spec_links");
+    // bootstrap_spec_links(&mut schema)?;
 
     trace!("expand_links: on_directive_definition_and_schema_parsed");
     FederationBlueprint::on_directive_definition_and_schema_parsed(&mut schema)?;
@@ -953,13 +955,18 @@ fn bootstrap_spec_links(schema: &mut FederationSchema) -> Result<(), FederationE
     //            version doesn't actually add implicit fed1 spec links to the schema, Rust version
     //            add it, so that fed 1 and fed 2 can be processed the same way in the method.
 
+
+    // TODO called at the end of setSchemaAsFed2Subgraph AND buildSchemaFromAST
+
     #[allow(clippy::collapsible_else_if)]
     if let Some(metadata) = schema.metadata() {
         // The schema has a @core or @link spec directive.
         if schema.is_fed_2() {
+            // TODO this should add fed 2 definitions????
             trace!("bootstrap_spec_links: metadata indicates fed2");
         } else {
             // This must be a Fed 1 schema.
+            // TODO this seems wrong? we'll only have metadata if it is fed 2 subgraph?
             trace!("bootstrap_spec_links: metadata indicates fed1");
             if metadata
                 .for_identity(&Identity::federation_identity())
@@ -985,6 +992,15 @@ fn bootstrap_spec_links(schema: &mut FederationSchema) -> Result<(), FederationE
             // This must be a Fed 1 schema with no link/federation spec.
             // Implicitly add the link spec and federation spec to the schema.
             trace!("bootstrap_spec_links: has no link/federation spec");
+            // TODO we should first FIX the KEY, PROVIDES, REQUIRES
+            // remove if
+            // -- definition has not argument as tall
+            // -- fields is nullable
+            // -- fields is named FieldSet instead of _FieldSet
+
+            // FED 1 logic was not adding @core -> it was just used to lookup the name in the schema
+
+
             let link_spec = LinkSpecDefinition::fed1_latest();
             // PORT_NOTE: JS version doesn't add link specs here, (maybe) due to a potential name
             //            conflict. We generate an alias to avoid conflicts, if necessary.
@@ -1009,7 +1025,7 @@ fn add_link_spec_to_schema(
     Ok(link_name_in_schema)
 }
 
-fn has_federation_spec_link(schema: &Schema) -> bool {
+pub(crate) fn has_federation_spec_link(schema: &Schema) -> bool {
     schema
         .schema_definition
         .directives

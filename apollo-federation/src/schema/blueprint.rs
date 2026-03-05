@@ -1,10 +1,9 @@
 use std::collections::HashSet;
-
+use std::sync::Arc;
 use apollo_compiler::Name;
 use apollo_compiler::Node;
 use apollo_compiler::ast::Directive;
 use apollo_compiler::ty;
-
 use crate::bail;
 use crate::error::FederationError;
 use crate::error::MultipleFederationErrors;
@@ -13,7 +12,7 @@ use crate::error::suggestion::did_you_mean;
 use crate::error::suggestion::suggestion_list;
 use crate::link::DEFAULT_LINK_NAME;
 use crate::link::Link;
-use crate::link::federation_spec_definition::FEDERATION_FIELDS_ARGUMENT_NAME;
+use crate::link::federation_spec_definition::{fed1_link_imports, FEDERATION_FIELDS_ARGUMENT_NAME, FED_1};
 use crate::link::federation_spec_definition::FEDERATION_KEY_DIRECTIVE_NAME_IN_SPEC;
 use crate::link::federation_spec_definition::FEDERATION_PROVIDES_DIRECTIVE_NAME_IN_SPEC;
 use crate::link::federation_spec_definition::FEDERATION_REQUIRES_DIRECTIVE_NAME_IN_SPEC;
@@ -21,7 +20,7 @@ use crate::link::federation_spec_definition::FEDERATION_VERSIONS;
 use crate::link::federation_spec_definition::FederationSpecDefinition;
 use crate::link::federation_spec_definition::get_federation_spec_definition_from_subgraph;
 use crate::link::link_spec_definition::LinkSpecDefinition;
-use crate::link::spec::Identity;
+use crate::link::spec::{Identity, Url};
 use crate::link::spec_definition::SpecDefinition;
 use crate::schema::FederationSchema;
 use crate::schema::ValidFederationSchema;
@@ -40,6 +39,7 @@ use crate::schema::validators::provides::validate_provides_directives;
 use crate::schema::validators::requires::validate_requires_directives;
 use crate::schema::validators::shareable::validate_shareable_directives;
 use crate::schema::validators::tag::validate_tag_directives;
+use crate::subgraph::typestate::has_federation_spec_link;
 use crate::supergraph::FEDERATION_ENTITIES_FIELD_NAME;
 use crate::supergraph::FEDERATION_SERVICE_FIELD_NAME;
 
@@ -66,14 +66,71 @@ impl FederationBlueprint {
     pub(crate) fn on_directive_definition_and_schema_parsed(
         schema: &mut FederationSchema,
     ) -> Result<(), FederationError> {
+        // only fed 2 schemas will have a link
+        if has_federation_spec_link(schema.schema()) {
+            Self::complete_fed_2_subgraph_schema(schema)?;
+        } else {
+            Self::complete_fed_1_subgraph_schema(schema)?;
+        }
+
+        // TODO
+        // If there's a use of `@link` and we successfully added its definition, add the bootstrap directive
+        // trace!("expand_links: bootstrap_spec_links");
+        // crate::subgraph::typestate::bootstrap_spec_links(&mut schema)?;
+
+        // TODO this should just check if links metadata exists and it is fed 2?
+        // schema.subgraph_metadata.is_some_and(|m| m.is_fed_2_schema())
         // PORT_NOTE: JS version calls `completeSubgraphSchema`. But, in Rust, it's implemented
         //            directly in this method and `Subgraph::expand_links`.
-        let federation_spec = get_federation_spec_definition_from_subgraph(schema)?;
-        if federation_spec.is_fed1() {
-            Self::remove_federation_definitions_broken_in_known_ways(schema)?;
-        }
-        federation_spec.add_elements_to_schema(schema)?;
+        // let federation_spec = get_federation_spec_definition_from_subgraph(schema)?;
+        // if federation_spec.is_fed1() {
+        //     Self::remove_federation_definitions_broken_in_known_ways(schema)?;
+        // }
+        // federation_spec.add_elements_to_schema(schema)?;
+
+        // process unapplied directives?
         Self::expand_known_features(schema)
+    }
+
+    fn complete_fed_2_subgraph_schema(schema: &mut FederationSchema) -> Result<(), FederationError> {
+        let federation_spec = get_federation_spec_definition_from_subgraph(schema)?;
+        federation_spec.add_elements_to_schema(schema)?;
+        Ok(())
+    }
+
+    fn complete_fed_1_subgraph_schema(schema: &mut FederationSchema) -> Result<(), FederationError> {
+        Self::remove_federation_definitions_broken_in_known_ways(schema)?;
+        // fed 1 schema won't have @link so we cannot use FederationSpecDefinition#add_elements_to_schema
+        let mut errors = MultipleFederationErrors { errors: vec![] };
+        let fed_1_link_spec_definition = LinkSpecDefinition::fed1_latest();
+        let fed_1_link = Arc::new(Link {
+            url: Url {
+                identity: (&fed_1_link_spec_definition.url().identity).clone(),
+                version: (&fed_1_link_spec_definition.url().version).clone(),
+            },
+            imports: fed1_link_imports(),
+            spec_alias: None,
+            purpose: None,
+        });
+        for type_spec in &FED_1.type_specs() {
+            if let Err(err) = type_spec.check_or_add(schema, Some(&fed_1_link)) {
+                errors.push(err);
+            }
+        }
+
+        for directive_spec in &FED_1.directive_specs() {
+            if let Err(err) = directive_spec.check_or_add(schema, Some(&fed_1_link)) {
+                errors.push(err);
+            }
+        }
+
+        if errors.errors.len() > 1 {
+            Err(FederationError::MultipleFederationErrors(errors))
+        } else if let Some(error) = errors.errors.pop() {
+            Err(FederationError::SingleFederationError(error))
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn ignore_parsed_field(schema: &FederationSchema, field_name: &str) -> bool {

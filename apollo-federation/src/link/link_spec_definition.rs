@@ -334,7 +334,6 @@ impl LinkSpecDefinition {
         Ok(())
     }
 
-    #[allow(unused)]
     pub(crate) fn fed1_latest() -> &'static Self {
         // Note: The `unwrap()` calls won't panic, since `CORE_VERSIONS` will always have at
         // least one version.
