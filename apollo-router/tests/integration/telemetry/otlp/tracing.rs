@@ -98,7 +98,8 @@ async fn test_basic() -> Result<(), BoxError> {
 }
 
 /// With OTLP telemetry, a request that passes through the router pipeline (e.g. with Rhai at the
-/// router layer) must produce the expected router span so request execution is observable.
+/// router layer) must still produce a valid trace. The router_http OTel span was removed, so we
+/// do not assert the "router" span here.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_router_http_observable_in_telemetry() -> Result<(), BoxError> {
     if !graph_os_enabled() {
@@ -124,7 +125,6 @@ async fn test_router_http_observable_in_telemetry() -> Result<(), BoxError> {
         .services(["client", "router", "subgraph"].into())
         .span_names(
             [
-                "router",
                 "query_planning",
                 "client_request",
                 "ExampleQuery__products__0",

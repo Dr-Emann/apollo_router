@@ -1,4 +1,4 @@
-# OTLP telemetry + Rhai at router layer. Used to assert that request execution is observable (router span present).
+# OTLP telemetry + Rhai at router layer. Used to assert that a request through this pipeline still produces a valid trace (router_http OTel span is not asserted).
 rhai:
   scripts: "tests/fixtures"
   main: "rhai_router_http_only.rhai"
