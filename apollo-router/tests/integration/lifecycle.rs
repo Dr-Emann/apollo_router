@@ -338,12 +338,12 @@ async fn test_plugin_ordering() {
                 "coprocessor": {
                     "url": coprocessor_url,
                     "router_http": {
-                        "request": { "context": { "all": true } },
-                        "response": { "context": { "all": true } },
+                        "request": { "context": "all" },
+                        "response": { "context": "all" },
                     },
                     "router": {
-                        "request": { "context": { "all": true } },
-                        "response": { "context": { "all": true } },
+                        "request": { "context": "all" },
+                        "response": { "context": "all" },
                     }
                 },
             }))
