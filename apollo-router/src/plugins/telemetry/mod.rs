@@ -1016,6 +1016,12 @@ impl PluginPrivate for Telemetry {
                         span.set_span_dyn_attributes(custom_attributes);
                         let result: Result<SubgraphResponse, BoxError> = f.await;
 
+                        // Debug span: measures telemetry response processing overhead
+                        // (attribute recording, instruments, events, error counting).
+                        // This is inside "subgraph" span but after "subgraph_request" completes.
+                        let _telemetry_response_span =
+                            tracing::debug_span!("subgraph_telemetry.response").entered();
+
                         match &result {
                             Ok(resp) => {
                                 if resp.response.status() >= StatusCode::BAD_REQUEST {

@@ -1389,6 +1389,11 @@ pub(crate) async fn call_single_http(
         }
     };
 
+    // Debug span: measures response processing time AFTER the subgraph_request span completes.
+    // If this span is growing, the delay is in response handling, not request dispatch.
+    let _response_processing_span =
+        tracing::debug_span!("subgraph_response.processing").entered();
+
     let subgraph_response_event = context
         .extensions()
         .with_lock(|lock| lock.get::<SubgraphEventResponse>().cloned());
