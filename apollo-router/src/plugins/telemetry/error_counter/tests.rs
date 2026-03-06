@@ -1065,7 +1065,7 @@ async fn test_router_error_counting() {
             .await
             .expect("test harness");
 
-        let router_service = test_harness.router_service(move |req| async move {
+        let router_service = test_harness.router_http_service(move |req| async move {
             RouterResponse::fake_builder()
                 .errors(vec![
                     graphql::Error::builder()
