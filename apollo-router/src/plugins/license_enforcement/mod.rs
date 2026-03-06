@@ -76,6 +76,15 @@ impl PluginPrivate for LicenseEnforcement {
                     match response {
                         Ok(ok) => Ok(ok),
                         Err(err) if err.is::<Overloaded>() => {
+                            // Emit the same metric that Telemetry's count_router_errors would emit.
+                            // We're in RouterHttp so the response never reaches the Router pipeline,
+                            // so we record it here to preserve the behavior from when this ran in router_service.
+                            u64_counter!(
+                                "apollo.router.graphql_error",
+                                "Number of GraphQL error responses returned by the router",
+                                1,
+                                code = "ROUTER_FREE_PLAN_RATE_LIMIT_REACHED"
+                            );
                             let error = graphql::Error::builder()
                                 .message("Your request has been rate limited. You've reached the limits for the Free plan. Consider upgrading to a higher plan for increased limits.")
                                 .extension_code("ROUTER_FREE_PLAN_RATE_LIMIT_REACHED")
@@ -111,12 +120,8 @@ register_private_plugin!("apollo", "license_enforcement", LicenseEnforcement);
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-    use std::sync::Mutex;
-
     use super::*;
     use crate::metrics::FutureMetricsExt;
-    use crate::plugins::telemetry::Telemetry;
     use crate::plugins::test::PluginTestHarness;
     use crate::uplink::license_enforcement::LicenseLimits;
     use crate::uplink::license_enforcement::LicenseState;
@@ -181,9 +186,7 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     async fn it_emits_metrics_when_tps_enforced() {
         async {
-            // GIVEN
-            // * a license with tps limits set to 1 req per 200ms
-            // * the router limits plugin
+            // GIVEN a license with TPS limits (1 req per 150ms) and the license enforcement plugin
             let license = LicenseState::Licensed {
                 limits: Some(LicenseLimits {
                     tps: Some(TpsLimit {
@@ -208,55 +211,18 @@ mod test {
                         .unwrap())
                 });
 
-            // WHEN
-            // * two reqs happen
-            // * and the telemetry plugin receives the second response with errors to count
-
+            // WHEN we send two requests so the second is rate-limited
             let _first_response = license_service.call_default().await;
-            let license_plugin_error_response = license_service.call_default().await.unwrap();
+            let second_response = license_service.call_default().await.unwrap();
 
-            // Put the error response in an arc and mutex so we can share it with telemetry threads
-            let slot = Arc::new(Mutex::new(Some(license_plugin_error_response)));
-            // We have to do a weird thing where we take the response from the license plugin and feed
-            // it as the mock response of the telemetry plugin so that telemetry plugin will count
-            // the errors. Ideally this would be done using a TestHarness, but using a "full"
-            // router with the Telemetry plugin will hit reload_metrics() on activation thus
-            // breaking async(){}.with_metrics() by shutting down its metrics provider.
-            // Ultimately this is the best way anyone could think of to simulate this scenario.
-            let _telemetry_service = PluginTestHarness::<Telemetry>::builder()
-                .config(
-                    r#"
-                    telemetry:
-                      apollo:
-                        endpoint: "http://example.com"
-                        client_name_header: "name_header"
-                        client_version_header: "version_header"
-                        buffer_size: 10000
-                    "#,
-                )
-                .build()
-                .await
-                .unwrap()
-                .router_service(move |_req| {
-                    let slot = Arc::clone(&slot);
-                    async move {
-                        // pull out our one error‐response
-                        let mut guard = slot.lock().unwrap();
-                        let resp = guard.take().unwrap();
-                        Ok(resp)
-                    }
-                })
-                .call(
-                    router::Request::fake_builder()
-                        .header("content-type", "application/json")
-                        .build()
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-
-            // THEN
-            // * we get a metric from the telemetry plugin saying the tps limit was enforced
+            // THEN the second response is rate-limited and the plugin has emitted the metric
+            // (same metric that Telemetry's count_router_errors would emit when response has
+            // ROUTER_FREE_PLAN_RATE_LIMIT_REACHED; we emit it here because we run in RouterHttp
+            // and the response never reaches the Router pipeline).
+            assert_eq!(
+                second_response.response.status(),
+                StatusCode::SERVICE_UNAVAILABLE
+            );
             assert_counter!(
                 "apollo.router.graphql_error",
                 1,
