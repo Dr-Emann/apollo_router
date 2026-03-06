@@ -2397,7 +2397,7 @@ mod tests {
                         .unwrap())
                 });
             let mut bad_request_router_service =
-                plugin.router_service(BoxService::new(mock_bad_request_service));
+                plugin.router_http_service(BoxService::new(mock_bad_request_service));
             let router_req = RouterRequest::fake_builder()
                 .header("x-custom", "TEST")
                 .header("conditional-custom", "X")
@@ -2474,7 +2474,7 @@ mod tests {
                         .unwrap())
                 });
             let mut bad_request_router_service =
-                plugin.router_service(BoxService::new(mock_bad_request_service));
+                plugin.router_http_service(BoxService::new(mock_bad_request_service));
             let router_req = RouterRequest::fake_builder()
                 .header("x-custom", "TEST")
                 .header("conditional-custom", "X")
