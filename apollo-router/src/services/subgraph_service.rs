@@ -259,6 +259,12 @@ impl tower::Service<SubgraphRequest> for SubgraphService {
         let mut notify = self.notify.clone();
 
         let make_calls = async move {
+            // This span measures the time from when the SubgraphService future starts
+            // executing to when it completes. The gap between the parent "subgraph" span
+            // start and this span start represents time spent in Buffer/traffic shaping layers.
+            let _subgraph_service_span =
+                tracing::debug_span!("subgraph_service.call").entered();
+
             // Subscription handling
             if request.operation_kind == OperationKind::Subscription
                 && request.subscription_stream.is_some()
@@ -1247,7 +1253,9 @@ async fn call_http(
             })?
     } else {
         tracing::debug!("we called http");
+        let _create_client_span = tracing::debug_span!("create_subgraph_http_client").entered();
         let client = client_factory.create(service_name);
+        drop(_create_client_span);
         call_single_http(request, body, context, client, service_name).await
     }
 }
@@ -1260,6 +1268,11 @@ pub(crate) async fn call_single_http(
     client: crate::services::http::BoxService,
     service_name: &str,
 ) -> Result<SubgraphResponse, BoxError> {
+    // Debug span to measure the setup time before the subgraph_request span is created.
+    // The gap between the parent "subgraph" span and this represents Buffer/traffic shaping wait.
+    // The duration of this span represents request serialization and setup overhead.
+    let _setup_span = tracing::debug_span!("subgraph_request.setup").entered();
+
     let subgraph_request_event = context
         .extensions()
         .with_lock(|lock| lock.get::<SubgraphEventRequest>().cloned());
@@ -1297,6 +1310,8 @@ pub(crate) async fn call_single_http(
 
     let schema_uri = request.uri();
     let (host, port, path) = get_uri_details(schema_uri);
+
+    drop(_setup_span);
 
     let subgraph_req_span = tracing::info_span!(SUBGRAPH_REQUEST_SPAN_NAME,
         "otel.kind" = "CLIENT",
